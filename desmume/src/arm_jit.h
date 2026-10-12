@@ -78,5 +78,6 @@ extern uintptr_t compiled_funcs[];
 #endif
 
 extern u32 saveBlockSizeJIT;
+extern bool jit_exec_hooks_dirty;
 
 #endif

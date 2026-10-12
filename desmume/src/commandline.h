@@ -86,6 +86,9 @@ public:
 	int arm9_gdb_port;
 	int arm7_gdb_port;
 	int start_paused;
+	std::string lua_script;  // --lua FILE: run this script once the ROM loads
+	std::string ini_file;    // --ini FILE: settings file instead of desmume.ini beside the exe (read by the frontend)
+	int headless;            // --headless: no visible windows, keep running unfocused
 	std::string cflash_image;
 	std::string cflash_path;
 	std::string gbaslot_rom;

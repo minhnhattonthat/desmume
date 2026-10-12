@@ -49,6 +49,9 @@
 #include "MMU_timing.h"
 #include "arm_jit.h"
 #include "bios.h"
+#ifdef HAVE_LUA
+#include "lua-engine.h"
+#endif
 
 #define LOG_JIT_LEVEL 0
 #define PROFILER_JIT_LEVEL 0
@@ -87,6 +90,8 @@ using namespace AsmJit;
 #endif
 
 u32 saveBlockSizeJIT = 0;
+// set when Lua exec hooks change; compiled blocks only carry the hooks that existed when they were compiled
+bool jit_exec_hooks_dirty = false;
 
 #ifdef MAPPED_JIT_FUNCS
 CACHE_ALIGN JIT_struct JIT;
@@ -4054,6 +4059,34 @@ static void emit_armop_call(u32 opcode)
 	ctx->setReturn(bb_cycles);
 }
 
+#ifdef HAVE_LUA
+static void jit_lua_exec_hook(u32 adr, u32 size)
+{
+	CallRegisteredLuaMemHook(adr, size, 0, LUAMEMHOOK_EXEC);
+}
+#endif
+
+// Lua memory.registerexec for JIT blocks: call the hook before an instruction whose address is hooked
+// (the interpreter does the same in armcpu_exec). Hooks added later apply once jit_exec_hooks_dirty flushes the cache.
+static void emit_lua_exec_hook()
+{
+#ifdef HAVE_LUA
+	if (!hookedRegions[LUAMEMHOOK_EXEC].NotEmpty() || !hookedRegions[LUAMEMHOOK_EXEC].Contains(bb_adr, bb_opcodesize))
+		return;
+	JIT_COMMENT("lua exec hook");
+	GpVar adr = c.newGpVar(kX86VarTypeGpd);
+	GpVar size = c.newGpVar(kX86VarTypeGpd);
+	c.mov(adr, bb_adr);
+	c.mov(size, bb_opcodesize);
+	X86CompilerFuncCall* ctx = c.call((void*)jit_lua_exec_hook);
+	ctx->setPrototype(ASMJIT_CALL_CONV, FuncBuilder2<Void, u32, u32>());
+	ctx->setArgument(0, adr);
+	ctx->setArgument(1, size);
+	c.unuse(adr);
+	c.unuse(size);
+#endif
+}
+
 static void _armlog(u8 proc, u32 addr, u32 opcode)
 {
 #if 0
@@ -4167,6 +4200,7 @@ static u32 compile_basicblock()
 			Label skip = c.newLabel();
 			emit_branch(CONDITION(opcode), skip);
 			if(!bEndBlock) sync_r15(opcode, 0, 0);
+			emit_lua_exec_hook();
 			emit_armop_call(opcode);
 			
 			if(cycles == 0)
@@ -4185,6 +4219,7 @@ static u32 compile_basicblock()
 		else
 		{
 			sync_r15(opcode, bEndBlock, 0);
+			emit_lua_exec_hook();
 			emit_armop_call(opcode);
 			if(cycles == 0)
 			{

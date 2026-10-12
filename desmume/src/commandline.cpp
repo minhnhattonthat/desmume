@@ -119,6 +119,11 @@ ENDL
 " --load-slot N              loads savestate from slot N (0-9)" ENDL
 " --play-movie DSM_FILE      automatically plays movie" ENDL
 " --record-movie DSM_FILE    begin recording a movie" ENDL
+" --lua LUA_FILE             run a Lua script once the ROM loads" ENDL
+ENDL
+"Arguments for scripted runs:" ENDL
+" --ini INI_FILE             use this settings file instead of desmume.ini (Windows)" ENDL
+" --headless                 hide all windows and keep running unfocused (Windows)" ENDL
 ENDL
 "Arguments affecting video filters:" ENDL
 " --scanline-filter-a N      Fadeout intensity (N/16) (topleft) (default 0)" ENDL
@@ -180,6 +185,9 @@ ENDL
 
 #define OPT_ADVANSCENE 900
 
+#define OPT_LUA_SCRIPT 1000
+#define OPT_INI_FILE 1001
+
 
 CommandLine::CommandLine()
 {
@@ -227,6 +235,7 @@ CommandLine::CommandLine()
 	arm9_gdb_port             = 0;
 	arm7_gdb_port             = 0;
 	start_paused              = 0;
+	headless                  = 0;
 	cflash_image              = "";
 	cflash_path               = "";
 	gbaslot_rom               = "";
@@ -321,6 +330,9 @@ bool CommandLine::parse(int argc,char **argv)
 			{ "load-slot", required_argument, NULL, OPT_LOAD_SLOT},
 			{ "play-movie", required_argument, NULL, OPT_PLAY_MOVIE},
 			{ "record-movie", required_argument, NULL, OPT_RECORD_MOVIE},
+			{ "lua", required_argument, NULL, OPT_LUA_SCRIPT},
+			{ "ini", required_argument, NULL, OPT_INI_FILE},
+			{ "headless", no_argument, &headless, 1},
 
 			//video filters
 			{ "scanline-filter-a", required_argument, NULL, OPT_SCANLINES_A},
@@ -400,6 +412,8 @@ bool CommandLine::parse(int argc,char **argv)
 
 		//utilities
 		case OPT_ADVANSCENE: CommonSettings.run_advanscene_import = optarg; break;
+		case OPT_LUA_SCRIPT: lua_script = optarg; break;
+		case OPT_INI_FILE: ini_file = optarg; break;
 		case OPT_LANGUAGE: language = atoi(optarg); break;
 		}
 	} //arg parsing loop

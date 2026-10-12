@@ -65,6 +65,10 @@
 #include "saves.h"
 #include "emufile.h"
 #include "types.h"
+#ifdef HAVE_JIT
+#include "arm_jit.h"
+#endif
+#include "formats/rpng.h"
 
 using namespace std;
 
@@ -2118,6 +2122,10 @@ DEFINE_LUA_FUNCTION(state_save, "location[,option]")
 			int stateNumber = luaL_checkinteger(L,1);
 			savestate_slot(stateNumber);
 		}	return 0;
+		case LUA_TSTRING: // file path
+			if(!savestate_save(lua_tostring(L,1)))
+				luaL_error(L, "failed to save savestate to %s", lua_tostring(L,1));
+			return 0;
 		case LUA_TUSERDATA: // in-memory save slot
 		{
 			EMUFILE_MEMORY** ppEmuFile = (EMUFILE_MEMORY**)luaL_checkudata(L, 1, "EMUFILE_MEMORY*");
@@ -2171,6 +2179,10 @@ DEFINE_LUA_FUNCTION(state_load, "location[,option]")
 			int stateNumber = luaL_checkinteger(L,1);
 			loadstate_slot(stateNumber);
 		}	return 0;
+		case LUA_TSTRING: // file path
+			if(!savestate_load(lua_tostring(L,1)))
+				luaL_error(L, "failed to load savestate from %s", lua_tostring(L,1));
+			return 0;
 		case LUA_TUSERDATA: // in-memory save slot
 		{
 			EMUFILE_MEMORY** ppEmuFile = (EMUFILE_MEMORY**)luaL_checkudata(L, 1, "EMUFILE_MEMORY*");
@@ -3358,6 +3370,42 @@ DEFINE_LUA_FUNCTION(gui_gdscreenshot, "[whichScreen='both']")
 	lua_pushlstring(L, str, size);
 	delete[] str;
 	return 1;
+}
+
+// gui.savepng(path[, whichScreen='both']): writes the screen straight to a PNG file (no gd conversion step)
+DEFINE_LUA_FUNCTION(gui_savepng, "path[,whichScreen='both']")
+{
+	const char* path = luaL_checkstring(L, 1);
+	prepare_reading();
+
+	int selectedScreen = 0;
+	if(lua_isstring(L, 2))
+	{
+		const char* str = lua_tostring(L, 2);
+		if(!stricmp(str,"top"))
+			selectedScreen = -1;
+		if(!stricmp(str,"bottom"))
+			selectedScreen = 1;
+	}
+	restrict_to_screen(selectedScreen);
+
+	int width = curGuiData.xMax - curGuiData.xMin;
+	int height = curGuiData.yMax - curGuiData.yMin;
+	std::vector<u8> bgr(width * height * 3);
+	u8* dst = &bgr[0];
+	u8* Src = (u8*)curGuiData.data + (curGuiData.stridePix*4) * curGuiData.yMin;
+	for(int y = curGuiData.yMin; y < curGuiData.yMax; y++, Src += curGuiData.stridePix*4)
+	{
+		for(int x = curGuiData.xMin; x < curGuiData.xMax; x++)
+		{
+			*dst++ = Src[4*x+0];
+			*dst++ = Src[4*x+1];
+			*dst++ = Src[4*x+2];
+		}
+	}
+	if(!rpng_save_image_bgr24(path, &bgr[0], width, height, width * 3))
+		luaL_error(L, "gui.savepng: could not write %s", path);
+	return 0;
 }
 
 // draws a gd image that's in gdstr format to the screen
@@ -4889,6 +4937,7 @@ static const struct luaL_reg guilib [] =
 	{"parsecolor", gui_parsecolor},
 	{"setlayermask", gui_setlayermask},
 	{"gdscreenshot", gui_gdscreenshot},
+	{"savepng", gui_savepng},
 	{"gdoverlay", gui_gdoverlay},
 	{"redraw", emu_redraw}, // some people might think of this as more of a GUI function
 	{"osdtext", gui_osdtext},
@@ -5738,6 +5787,10 @@ TieredRegion hookedRegions [LUAMEMHOOK_COUNT];
 // that has this callback enabled.
 static void CalculateMemHookRegions(LuaMemHookType hookType)
 {
+#ifdef HAVE_JIT
+	if (hookType == LUAMEMHOOK_EXEC || hookType == LUAMEMHOOK_EXEC_SUB)
+		jit_exec_hooks_dirty = true; // NDS_exec flushes compiled blocks so they pick up the new hooks
+#endif
 	std::vector<unsigned int> hookedBytes;
 	std::map<int, LuaContextInfo*>::iterator iter = luaContextInfo.begin();
 	std::map<int, LuaContextInfo*>::iterator end = luaContextInfo.end();

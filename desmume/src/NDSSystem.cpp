@@ -2108,6 +2108,15 @@ void NDS_exec(s32 nb)
 {
 	GDBSTUB_MUTEX_LOCK();
 
+#ifdef HAVE_JIT
+	if (jit_exec_hooks_dirty) // between frames, so no compiled block is running
+	{
+		jit_exec_hooks_dirty = false;
+		if (CommonSettings.use_jit)
+			arm_jit_reset(true, true);
+	}
+#endif
+
 	LagFrameFlag=1;
 
 	sequencer.nds_vblankEnded = false;

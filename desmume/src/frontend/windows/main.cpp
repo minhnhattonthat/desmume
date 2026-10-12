@@ -381,6 +381,8 @@ std::vector<HWND> LuaScriptHWnds;
 LRESULT CALLBACK LuaScriptProc(HWND, UINT, WPARAM, LPARAM);
 
 bool autoLoadLua;
+static std::string cmdLuaScript; // --lua
+static bool headlessMode = false; // --headless
 #define MAX_RECENT_SCRIPTS 15 // must match value in luaconsole.cpp (belongs in a header, but I didn't want to create one just for this)
 extern char Recent_Scripts[MAX_RECENT_SCRIPTS][1024];
 
@@ -2063,7 +2065,11 @@ int _main()
 	}
 	cmdline.validate();
 	start_paused = cmdline.start_paused!=0;
-	
+	cmdLuaScript = cmdline.lua_script;
+	headlessMode = cmdline.headless != 0;
+	if (headlessMode)
+		lostFocusPause = false; // a hidden window never has focus
+
 	FrameLimit = (cmdline.disable_limiter == 1) ? false : GetPrivateProfileBool("FrameLimit", "FrameLimit", true, IniName);
 	
 	// Temporary scanline parameter setting for Windows.
@@ -2497,7 +2503,7 @@ int _main()
 		HK_StateLoadSlot(load, true);
 	}
 
-	MainWindow->Show(SW_NORMAL);
+	MainWindow->Show(headlessMode ? SW_HIDE : SW_NORMAL);
 
 	if(cmdline.windowed_fullscreen)
 		ToggleFullscreen();
@@ -2596,6 +2602,14 @@ int WINAPI WinMain (HINSTANCE hThisInstance,
 	hAppInst=hThisInstance;
 
 	GetINIPath();
+	for (int i = 1; i + 1 < __argc; i++) // --ini FILE (also accepted by CommandLine, which parses later)
+	{
+		if (!strcmp(__argv[i], "--ini") && strlen(__argv[i + 1]) < MAX_PATH)
+		{
+			strcpy(IniName, __argv[i + 1]);
+			wcscpy(IniNameW, mbstowcs_locale(IniName).c_str());
+		}
+	}
 
 	#if !defined(PUBLIC_RELEASE) || defined(DEVELOPER)
 		static const bool defaultConsoleEnable = true;
@@ -3023,7 +3037,14 @@ static BOOL OpenCore(const char* filename)
 			start_paused = 0;
 		}
 
-		if(autoLoadLua)
+		if(!cmdLuaScript.empty())
+		{
+			HWND hDlg = CreateDialogW(hAppInst, MAKEINTRESOURCEW(IDD_LUA), MainWindow->getHWnd(), (DLGPROC) LuaScriptProc);
+			if(headlessMode)
+				ShowWindow(hDlg, SW_HIDE);
+			SendDlgItemMessage(hDlg, IDC_EDIT_LUAPATH, WM_SETTEXT, (WPARAM) 512, (LPARAM) cmdLuaScript.c_str());
+		}
+		else if(autoLoadLua)
 		{
 			string luaScript;
 			luaScript.append(path.pathToLua);
