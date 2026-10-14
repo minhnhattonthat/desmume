@@ -35,6 +35,9 @@
 #include "debug.h"
 #include "driver.h"
 #include "rtc.h"
+#if defined(WIN32_FRONTEND)
+#include "frontend/windows/qa_msgbox.h"
+#endif
 #include "mic.h"
 #include "version.h"
 #include "path.h"

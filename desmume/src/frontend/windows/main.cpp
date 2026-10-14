@@ -117,6 +117,7 @@
 #include "soundView.h"
 #include "importSave.h"
 #include "fsnitroView.h"
+#include "qa_msgbox.h"
 //
 //static size_t heapram = 0;
 //void* operator new[](size_t amt)
@@ -383,6 +384,25 @@ LRESULT CALLBACK LuaScriptProc(HWND, UINT, WPARAM, LPARAM);
 bool autoLoadLua;
 static std::string cmdLuaScript; // --lua
 static bool headlessMode = false; // --headless
+bool g_qaHeadless = false; // same value, visible to qa_msgbox.h users
+
+int QAMessageBox(HWND hwnd, const char *text, const char *caption, UINT type)
+{
+	if (!g_qaHeadless)
+		return MessageBoxA(hwnd, text, caption, type);
+	// nobody can click a box owned by a hidden window: log it and answer so the run continues
+	printf("[POPUP] %s: %s\n", caption ? caption : "", text ? text : "");
+	fflush(stdout);
+	switch (type & MB_TYPEMASK)
+	{
+		case MB_YESNO:				return IDNO;
+		case MB_YESNOCANCEL:
+		case MB_OKCANCEL:
+		case MB_RETRYCANCEL:		return IDCANCEL;
+		case MB_ABORTRETRYIGNORE:	return IDIGNORE;
+		default:					return IDOK;
+	}
+}
 #define MAX_RECENT_SCRIPTS 15 // must match value in luaconsole.cpp (belongs in a header, but I didn't want to create one just for this)
 extern char Recent_Scripts[MAX_RECENT_SCRIPTS][1024];
 
@@ -1568,7 +1588,11 @@ static BOOL LoadROM(const char * filename, const char * physicalName, const char
 		return TRUE;		
 	}
 	else
+	{
 		msgbox->error("Loading %s FAILED.\n", logicalName);
+		if (g_qaHeadless)
+			exit(4); // an unattended run with no game would only idle until the harness times out
+	}
 
 	return FALSE;
 }
@@ -2067,8 +2091,12 @@ int _main()
 	start_paused = cmdline.start_paused!=0;
 	cmdLuaScript = cmdline.lua_script;
 	headlessMode = cmdline.headless != 0;
+	g_qaHeadless = headlessMode;
 	if (headlessMode)
+	{
 		lostFocusPause = false; // a hidden window never has focus
+		SetErrorMode(SEM_FAILCRITICALERRORS | SEM_NOGPFAULTERRORBOX | SEM_NOOPENFILEERRORBOX); // no crash dialogs either
+	}
 
 	FrameLimit = (cmdline.disable_limiter == 1) ? false : GetPrivateProfileBool("FrameLimit", "FrameLimit", true, IniName);
 	

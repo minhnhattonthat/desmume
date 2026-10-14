@@ -62,7 +62,7 @@ static void* alloc_executable_memory(size_t size) {
 #if defined(_WIN32) && ! defined(__ANDROID__)
   void *ptr = VirtualAlloc(NULL, size, MEM_COMMIT | MEM_RESERVE, PAGE_EXECUTE_READWRITE);
   if (! ptr) {
-    MessageBoxA(NULL, "VirtualAlloc failed", "Error", MB_OK);
+    fprintf(stderr, "VirtualAlloc failed\n"); // not a MessageBox: it would block an unattended run
     return NULL;
   }
 #else

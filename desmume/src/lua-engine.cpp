@@ -69,6 +69,9 @@
 #include "arm_jit.h"
 #endif
 #include "formats/rpng.h"
+#if defined(WIN32_FRONTEND)
+#include "frontend/windows/qa_msgbox.h"
+#endif
 
 using namespace std;
 

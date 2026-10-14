@@ -9,7 +9,7 @@ translate-retro-game skill's `emu.py`). Upstream behaviour is unchanged unless a
 |---|---|
 | `--ini FILE` | Use FILE instead of `desmume.ini` beside the exe. One ini per run: nothing shared, runs can go in parallel. |
 | `--lua FILE` | Run a Lua script once the ROM loads (no "auto-load Lua" ini setting needed). |
-| `--headless` | Hide the main and Lua windows, and keep emulating while unfocused. |
+| `--headless` | Hide the main and Lua windows, keep emulating while unfocused, and never show a dialog: every MessageBox (ROM load errors, `gui.popup`, ...) is logged to stdout as `[POPUP] title: text` and answered with the choice that keeps going (No / Cancel / OK), crash dialogs are off, and a ROM that fails to load exits with code 4. |
 
 Existing flags that scripted runs want: `--disable-limiter`, `--jit-enable`, `--disable-sound`.
 
